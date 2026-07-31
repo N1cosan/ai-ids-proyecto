@@ -12,11 +12,12 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel, Field
 
-from src.phishing.detector import analyze_message
+from src.phishing.detector import analyze_message, PhishingDetector, DEFAULT_MODEL_PATH
 from src.phishing.explain import generar_explicacion, generar_resumen_corto
 from src.phishing.alertas_telegram import enviar_alerta_telegram
 from src.phishing.db import init_db, guardar_analisis, listar_ultimos
 from src.phishing.api.auth import verificar_api_key
+
 
 app = FastAPI(
     title="THE TRUTH ENGINE — Anti-Phishing",
@@ -26,6 +27,14 @@ app = FastAPI(
 @app.on_event("startup")
 def startup():
     init_db()
+    # Precargar el modelo ML para evitar 503 en la primera petición
+    try:
+        print("[startup] Cargando modelo de phishing...")
+        detector = PhishingDetector(model_path=DEFAULT_MODEL_PATH)
+        detector._cargar_modelo()
+        print("[startup] Modelo cargado correctamente.")
+    except Exception as e:
+        print(f"[startup] Error al cargar modelo: {e}")
 
 # ---------------------------------------------------------------------------
 # Modelos
