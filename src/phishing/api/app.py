@@ -121,6 +121,7 @@ async def analyze(
         )
 
     # Análisis principal
+# Análisis principal
     try:
         result = analyze_message(
             texto=req.texto,
@@ -129,6 +130,9 @@ async def analyze(
             urls=req.urls,
         )
     except FileNotFoundError as e:
+        # --- AGREGA ESTA LÍNEA PARA VER EL ARCHIVO FALTANTE EN RENDER ---
+        print(f"❌ ERROR CRÍTICO - ARCHIVO NO ENCONTRADO: {e}") 
+        
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"Modelo o recurso no disponible: {e}",
