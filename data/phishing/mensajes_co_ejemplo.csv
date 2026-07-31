@@ -1,0 +1,21 @@
+texto,label,canal
+"Bancolombia informa: su cuenta sera bloqueada hoy, valide sus datos aqui bit.ly/segur-bancol",1,sms
+"Nequi: detectamos un movimiento no reconocido. Confirma tu clave dinamica en nequi-verificacion.xyz",1,whatsapp
+"DIAN: tiene un pago pendiente por mora. Evite el reporte a central de riesgo, pague ya en dian-pagos.top",1,email
+"Hola mama, se me daño el celular, este es mi nuevo numero, necesito que me hagas un favor urgente",1,whatsapp
+"Servientrega: su paquete esta retenido por datos incompletos, actualice aqui servientrega-envios.click",1,sms
+"Felicidades, ha sido seleccionado para reclamar un bono Daviplata, ingrese sus datos en daviplata-bono.info",1,whatsapp
+"Soporte tecnico Claro: verificamos que su linea sera suspendida, confirme su cedula y clave en claro-soporte.shop",1,sms
+"PSE: su pago no fue procesado, actualice su clave bancaria en pse-colombia.xyz para reintentar",1,email
+"Su codigo OTP es 482913, no lo comparta con nadie",0,sms
+"Bancolombia le informa que su extracto de julio ya esta disponible en la app",0,email
+"Recordatorio: su cita medica con la EPS es manana a las 9am",0,sms
+"Hola, ¿nos vemos manana para el proyecto? Confirmame la hora por favor",0,whatsapp
+"Su pedido de Mercado Libre fue despachado y llegara en 3 dias habiles",0,email
+"Davivienda: gracias por su pago, su saldo ha sido actualizado correctamente",0,sms
+"Claro: su factura de este mes ya esta disponible, puede consultarla en la app oficial Mi Claro",0,sms
+"Buenas, ¿ya llegaste a la casa? avisame cuando puedas",0,whatsapp
+"Coordinadora: su envio numero 4521 fue entregado exitosamente",0,sms
+"Reunion de equipo reprogramada para las 3pm, revisen la agenda compartida",0,email
+"Tigo: disfruta de datos gratis este fin de semana, aplica en la app oficial",0,sms
+"Recuerda que tu factura de Movistar vence el 15, puedes pagarla en la app o en puntos autorizados",0,sms

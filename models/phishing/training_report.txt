@@ -1,0 +1,12 @@
+=== Reporte de entrenamiento: Capa de Texto Anti-Phishing ===
+
+              precision    recall  f1-score   support
+
+    legitimo       0.75      0.75      0.75         4
+    phishing       0.83      0.83      0.83         6
+
+    accuracy                           0.80        10
+   macro avg       0.79      0.79      0.79        10
+weighted avg       0.80      0.80      0.80        10
+
+ROC-AUC: 0.9166666666666666

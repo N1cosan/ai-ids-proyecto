@@ -1,0 +1,38 @@
+# Secretos
+.env
+.env.local
+.env.*.local
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+venv/
+.venv/
+env/
+ENV/
+
+# Base de datos local
+*.db
+*.sqlite3
+data/phishing/truth_engine.db
+
+# IDE / sistema
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Logs y temporales
+*.log
+tmp/
+temp/
+.env
+*.env
+
+# Datasets grandes de red (CICIDS) - no subir a GitHub
+data/raw/*.csv
+data/processed/*.csv

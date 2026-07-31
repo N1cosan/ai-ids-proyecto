@@ -1,0 +1,21 @@
+{
+  "n_train": 29,
+  "n_test": 10,
+  "roc_auc": 0.9166666666666666,
+  "confusion_matrix": {
+    "labels": [
+      "legitimo",
+      "phishing"
+    ],
+    "matrix": [
+      [
+        3,
+        1
+      ],
+      [
+        1,
+        5
+      ]
+    ]
+  }
+}
