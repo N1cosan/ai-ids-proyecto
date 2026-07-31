@@ -1,12 +1,10 @@
 ﻿"""
-alertas_telegram.py
---------------------
-Envía alertas a Telegram cuando el análisis es phishing
+alertas_telegram.py — Envía alertas a Telegram cuando el análisis es phishing
 o sospechoso con score >= 50.
-Los secretos se leen de variables de entorno / .env
 """
 from __future__ import annotations
 
+import html
 import os
 from typing import Optional
 
@@ -45,16 +43,18 @@ async def enviar_alerta_telegram(
     explicacion = resultado.get("explicacion") or ""
     resumen = resultado.get("resumen") or f"[{etiqueta}] score={score}"
 
-    preview = (texto_original[:180] + "...") if len(texto_original) > 180 else texto_original
-    motivos_txt = "\n".join(f"- {m}" for m in motivos) or "- (sin motivos detallados)"
+    raw_preview = (texto_original[:180] + "...") if len(texto_original) > 180 else texto_original
+    preview = html.escape(raw_preview)
+    
+    motivos_txt = "\n".join(f"- {html.escape(m)}" for m in motivos) or "- (sin motivos detallados)"
 
     mensaje = (
-        f"<b>{resumen}</b>\n\n"
-        f"<b>Canal:</b> {canal}\n"
+        f"<b>{html.escape(resumen)}</b>\n\n"
+        f"<b>Canal:</b> {html.escape(str(canal))}\n"
         f"<b>Score:</b> {score}/100\n\n"
         f"<b>Motivos:</b>\n{motivos_txt}\n\n"
         f"<b>Mensaje analizado:</b>\n<code>{preview}</code>\n\n"
-        f"{explicacion}"
+        f"{html.escape(explicacion)}"
     )
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"
@@ -65,7 +65,11 @@ async def enviar_alerta_telegram(
         "disable_web_page_preview": True,
     }
 
-    async with httpx.AsyncClient(timeout=10.0) as client:
-        resp = await client.post(url, json=payload)
-        resp.raise_for_status()
-        return resp.json()
+    try:
+        async with httpx.AsyncClient(timeout=10.0) as client:
+            resp = await client.post(url, json=payload)
+            resp.raise_for_status()
+            return resp.json()
+    except Exception as e:
+        print(f"[telegram] Error al enviar la alerta: {e}")
+        return {"error": str(e)}
