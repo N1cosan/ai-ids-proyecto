@@ -107,12 +107,13 @@ def root():
 def health():
     return {"status": "ok"}
 
-
 @app.post("/analyze", response_model=AnalyzeResponse)
 async def analyze(
     req: AnalyzeRequest,
     _auth: bool = Depends(verificar_api_key),
 ):
+    print("🚩 PASO 1: Petición recibida y autorizada en /analyze")
+    
     # Validación de canal
     if req.canal not in {"whatsapp", "email", "sms"}:
         raise HTTPException(
@@ -121,14 +122,15 @@ async def analyze(
         )
 
     # Análisis principal
-# Análisis principal
     try:
+        print("🚩 PASO 2: Entrando a la función analyze_message()...")
         result = analyze_message(
             texto=req.texto,
             remitente=req.remitente,
             canal=req.canal,
             urls=req.urls,
         )
+        print("🚩 PASO 3: analyze_message() terminó correctamente!")
     except FileNotFoundError as e:
         # --- AGREGA ESTA LÍNEA PARA VER EL ARCHIVO FALTANTE EN RENDER ---
         print(f"❌ ERROR CRÍTICO - ARCHIVO NO ENCONTRADO: {e}") 
