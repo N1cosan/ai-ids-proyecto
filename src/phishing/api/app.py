@@ -35,7 +35,6 @@ def startup():
         print("[startup] Modelo cargado correctamente.")
     except Exception as e:
         print(f"[startup] Error al cargar modelo: {e}")
-
 # ---------------------------------------------------------------------------
 # Modelos
 # ---------------------------------------------------------------------------
