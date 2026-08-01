@@ -73,8 +73,9 @@ class AnalyzeResponse(BaseModel):
     explicacion: Optional[str] = None
     resumen: Optional[str] = None
     telegram_enviado: bool = False
-    telegram_error: Optional[str] = None   # nuevo: mensaje de error si falló Telegram
- 
+    telegram_error: Optional[str] = None
+    analizado_por_llm: bool = False
+    llm_categoria: Optional[str] = None
  
 # ---------------------------------------------------------------------------
 # Manejadores globales de excepciones
@@ -180,6 +181,7 @@ async def analyze(
             print(f"[telegram] Error al enviar: {e}")
  
     # Guardar en SQLite
+ # Guardar en SQLite
     try:
         guardar_analisis(
             texto=req.texto,
@@ -192,6 +194,8 @@ async def analyze(
             indicadores=result.get("indicadores") or {},
             telegram_enviado=telegram_enviado,
             telegram_error=telegram_error,
+            analizado_por_llm=result.get("analizado_por_llm", False),
+            llm_categoria=result.get("llm_categoria"),
         )
     except Exception as e:
         print(f"[db] Error al guardar análisis: {e}")
@@ -209,6 +213,8 @@ async def analyze(
         "resumen": resumen,
         "telegram_enviado": telegram_enviado,
         "telegram_error": telegram_error,
+        "analizado_por_llm": result.get("analizado_por_llm", False),
+        "llm_categoria": result.get("llm_categoria"),
     }
  
  
