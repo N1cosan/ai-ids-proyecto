@@ -17,6 +17,7 @@ from src.phishing.explain import generar_explicacion, generar_resumen_corto
 from src.phishing.alertas_telegram import enviar_alerta_telegram
 from src.phishing.db import init_db, guardar_analisis, listar_ultimos
 from src.phishing.api.auth import verificar_api_key
+from fastapi.middleware.cors import CORSMiddleware
 
 
 app = FastAPI(
@@ -47,6 +48,26 @@ class AnalyzeRequest(BaseModel):
         default=True,
         description="Si True, envía Telegram cuando sea phishing/sospechoso",
     )
+
+
+from fastapi.middleware.cors import CORSMiddleware
+...
+app = FastAPI(
+    title="THE TRUTH ENGINE — Anti-Phishing",
+    description="Detección de phishing e ingeniería social orientada a Colombia (texto).",
+    version="0.1.3",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["POST"],
+    allow_headers=["*"],
+)
+
+@app.on_event("startup")
+def startup():
+    ...
 
 
 class AnalyzeResponse(BaseModel):
