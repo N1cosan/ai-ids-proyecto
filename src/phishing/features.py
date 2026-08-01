@@ -52,6 +52,7 @@ URGENCIA = [
     "deuda pendiente", "reportado", "central de riesgo",
     # Seguros / SOAT / DIAN / paquetes
     "poliza activada", "póliza activada", "seguro activado", "seguro no solicitado",
+    "quedo activada", "quedó activada", "quedo activado", "quedó activado",
     "cancelar poliza", "cancelar póliza", "cancelar seguro",
     "paquete retenido", "envio retenido", "envío retenido", "aduana",
     "pago pendiente dian", "sancion dian", "sanción dian", "embargo dian",
