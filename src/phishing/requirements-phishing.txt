@@ -1,3 +1,13 @@
-# Capa LLM (llm_classifier.py) — llamadas HTTP a la API de Anthropic
-httpx>=0.24
+pandas>=2.0
+scikit-learn>=1.3
+joblib>=1.3
+
+# Persistencia (SQLite local / Postgres-Neon en produccion)
 psycopg2-binary>=2.9
+
+# Capa LLM (llm_classifier.py) — llamadas HTTP a la API de Anthropic,
+# y consulta de breach_checker.py a XposedOrNot
+httpx>=0.24
+
+# Nota: url_analyzer.py y features.py usan solo stdlib (re, difflib,
+# unicodedata, urllib.parse) a proposito.
