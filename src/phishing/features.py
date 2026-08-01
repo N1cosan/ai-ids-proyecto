@@ -43,54 +43,95 @@ def normalize_text(texto: str) -> str:
 # Léxicos orientados a Colombia
 # ---------------------------------------------------------------------
 
-# Presión / urgencia artificial
 URGENCIA = [
-    "bloqueara", "bloqueado", "bloqueada", "sera bloqueada", "cuenta bloqueada",
-    "suspendida", "suspension", "vence hoy", "vence en", "ultima oportunidad",
-    "actua ahora", "de inmediato", "urgente", "24 horas", "hoy mismo",
+    "bloqueara", "bloqueado", "bloqueada", "sera bloqueada", "será bloqueada",
+    "cuenta bloqueada", "suspendida", "suspension", "suspensión",
+    "vence hoy", "vence en", "ultima oportunidad", "última oportunidad",
+    "actua ahora", "actúa ahora", "de inmediato", "urgente", "24 horas", "hoy mismo",
     "antes de que", "para evitar el bloqueo", "pago pendiente", "mora",
     "deuda pendiente", "reportado", "central de riesgo",
+    # Seguros / SOAT / DIAN / paquetes
+    "poliza activada", "póliza activada", "seguro activado", "seguro no solicitado",
+    "cancelar poliza", "cancelar póliza", "cancelar seguro",
+    "paquete retenido", "envio retenido", "envío retenido", "aduana",
+    "pago pendiente dian", "sancion dian", "sanción dian", "embargo dian",
+    "soat vencido", "soat barato", "renovar soat",
 ]
 
 # Suplantación de marcas / entidades típicas en Colombia
 MARCAS_CO = [
-    "bancolombia", "davivienda", "banco de bogota", "bbva", "banco popular",
-    "banco caja social", "colpatria", "scotiabank", "nequi", "daviplata",
-    "pse", "aval", "redeban", "efecty", "baloto",
-    "dian", "policia nacional", "fiscalia", "migracion colombia",
-    "servientrega", "coordinadora", "envia", "interrapidisimo", "tcc",
+    "bancolombia", "davivienda", "banco de bogota", "banco de bogotá", "bbva",
+    "banco popular", "banco caja social", "colpatria", "scotiabank",
+    "nequi", "daviplata", "pse", "aval", "redeban", "efecty", "baloto",
+    "dian", "policia nacional", "policía nacional", "fiscalia", "fiscalía",
+    "migracion colombia", "migración colombia",
+    "servientrega", "coordinadora", "envia", "envía", "interrapidisimo",
+    "interrapidísimo", "tcc",
     "claro", "movistar", "tigo", "wom", "une",
-    "eps", "sisben", "coljuegos",
+    "eps", "sisben", "sisbén", "coljuegos",
+    "soat",  # útil como “marca” de estafa de seguros
 ]
 
 SOPORTE_TECNICO = [
-    "soporte tecnico", "mesa de ayuda", "equipo de seguridad",
-    "departamento de fraude", "verificacion de cuenta", "actualizar datos",
+    "soporte tecnico", "soporte técnico", "mesa de ayuda", "equipo de seguridad",
+    "departamento de fraude", "verificacion de cuenta", "verificación de cuenta",
+    "actualizar datos",
+    # Operadores y soporte falso de WhatsApp / bancos
+    "soporte claro", "soporte movistar", "soporte tigo", "soporte wom",
+    "asesor bancolombia", "asesor nequi", "asesor davivienda",
+    "area de seguridad", "área de seguridad", "seguridad bancaria",
+    "proteccion de cuenta", "protección de cuenta",
 ]
 
 # Solicitud directa de datos sensibles / credenciales
 SOLICITUD_DATOS = [
-    "numero de tarjeta", "codigo otp", "clave dinamica", "clave de acceso",
-    "contrasena", "cvv", "fecha de vencimiento de tarjeta", "numero de cuenta",
-    "confirmar tus datos", "valida tu cuenta", "verifica tu cuenta",
-    "actualiza tus datos", "clave de tu banco", "token de seguridad",
-    "valide sus datos", "valide sus datos aqui", "valide sus datos aquí",
+    # Claves y OTP clásicos
+    "numero de tarjeta", "código otp", "codigo otp", "clave dinamica", "clave dinámica",
+    "clave de acceso", "contrasena", "contraseña", "cvv",
+    "fecha de vencimiento de tarjeta", "numero de cuenta", "número de cuenta",
+    "confirmar tus datos", "valida tu cuenta", "valide su cuenta",
+    "verifica tu cuenta", "actualiza tus datos", "clave de tu banco",
+    "token de seguridad", "valide sus datos", "valide sus datos aqui", "valide sus datos aquí",
     "ingrese sus datos", "ingresa tus datos", "actualizar datos",
     "confirme su cedula", "confirme su cédula", "confirme su clave",
-    "verifique sus datos", "actualice sus datos", "actualice aqui",
-    "actualice aquí", "valide aqui", "valide aquí",
+    "verifique sus datos", "actualice sus datos", "actualice aqui", "actualice aquí",
+    "valide aqui", "valide aquí",
+    # Nequi / “acepta el pago” / “te envié por error”
+    "acepta el pago", "acepta el cobro", "aceptar el pago", "aceptar el cobro",
+    "oprime aceptar", "presiona aceptar", "dale en aceptar",
+    "te envie por error", "te envié por error", "envie por equivocacion",
+    "envié por equivocación", "transferencia por error", "te cayeron por error",
+    "devuelveme el dinero", "devuélveme el dinero", "devuelve el dinero",
+    "reembolsame", "reembólsame", "regresame el dinero", "regresa el dinero",
+    "confirma la transferencia", "autoriza el pago", "autoriza el cobro",
+    "clave dinamica nequi", "clave dinámica nequi", "codigo nequi", "código nequi",
 ]
-# Patrones típicos de estafas de WhatsApp ("hola mama", cuentas nuevas)
 WHATSAPP_ESTAFAS = [
-    "hola mama", "hola papa", "se me daño el celular", "este es mi nuevo numero",
-    "necesito que me hagas un favor", "transferencia urgente", "prestame",
-    "consigname", "envia el dinero a esta cuenta", "cambie de numero",
+    # Estafa familiar clásica
+    "hola mama", "hola papa", "hola mamá", "hola papá",
+    "se me daño el celular", "se me dañó el celular", "se me rompio el celular",
+    "se me rompió el celular", "se me dano el celular",
+    "este es mi nuevo numero", "este es mi nuevo número",
+    "cambie de numero", "cambié de número", "perdi el celular", "perdí el celular",
+    "necesito que me hagas un favor", "necesito un favor urgente",
+    "transferencia urgente", "prestame", "préstame", "consigname", "consígame",
+    "envia el dinero a esta cuenta", "envía el dinero a esta cuenta",
+    "me robaron el celular", "me asaltaron", "estoy en un apuro",
+    "necesito plata urgente", "me puedes prestar", "me puedes consignar",
+    # Robo / suplantación de cuenta de WhatsApp
+    "codigo de verificacion", "código de verificación",
+    "codigo de seguridad de whatsapp", "código de seguridad de whatsapp",
+    "soporte de whatsapp", "soporte whatsapp", "whatsapp support",
+    "intentan clonar tu cuenta", "clonar tu whatsapp", "verificar tu cuenta de whatsapp",
+    "te enviamos un codigo", "te enviamos un código",
+    "ingresa el codigo", "ingresa el código", "envia el codigo", "envía el código",
 ]
 
-# Señales de "premio" / ingeniería social clásica
 PREMIOS_GANCHOS = [
-    "ganaste", "has sido seleccionado", "reclama tu premio", "sorteo",
-    "regalo", "beneficiario", "subsidio", "bono", "devolucion de saldo",
+    "ganaste", "has sido seleccionado", "has sido seleccionada",
+    "reclama tu premio", "sorteo", "regalo", "beneficiario",
+    "subsidio", "bono", "devolucion de saldo", "devolución de saldo",
+    "promocion exclusiva", "promoción exclusiva", "oferta limitada",
 ]
 
 _ALL_LEXICONS = {
