@@ -1,2 +1,3 @@
 # Capa LLM (llm_classifier.py) — llamadas HTTP a la API de Anthropic
 httpx>=0.24
+psycopg2-binary>=2.9

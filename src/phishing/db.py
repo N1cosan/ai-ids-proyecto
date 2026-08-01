@@ -1,20 +1,21 @@
 """
-db.py — Persistencia simple con SQLite para THE TRUTH ENGINE
+db.py — Persistencia para THE TRUTH ENGINE.
 
-Nota sobre Render (plan gratuito): el disco es efimero, cualquier
-archivo SQLite se pierde en cada redeploy/reinicio. Este modulo sigue
-usando SQLite porque es lo mas simple para el MVP, pero deja el punto
-de entrada (get_connection) centralizado a proposito: el dia que se
-conecte una base persistente real (Postgres via Supabase/Neon/Render
-Postgres, usando la variable de entorno DATABASE_URL), el cambio se
-hace en un solo lugar. Implementar ese soporte es un cambio de fondo
-(sintaxis SQL distinta: AUTOINCREMENT vs SERIAL, placeholders %s vs ?,
-requiere psycopg2/asyncpg) -- se deja como siguiente paso aparte, no
-se improvisa aqui sin poder probarlo.
+Soporta dos backends, elegidos automaticamente segun el entorno:
+
+- Si existe la variable de entorno DATABASE_URL -> usa PostgreSQL
+  (pensado para Neon en produccion/Render). Los datos NO se pierden
+  en cada redeploy.
+- Si NO existe DATABASE_URL -> usa SQLite local (data/phishing/truth_engine.db),
+  como hasta ahora. Util para desarrollo local sin depender de internet.
+
+El resto del modulo (guardar_analisis, listar_ultimos, etc.) tiene la
+misma firma sin importar el backend -- app.py no necesita cambiar.
 """
 from __future__ import annotations
 
 import json
+import os
 import sqlite3
 from datetime import datetime, timezone
 from pathlib import Path
@@ -22,16 +23,24 @@ from typing import Any, Optional
 
 DEFAULT_DB_PATH = Path("data/phishing/truth_engine.db")
 
-# Columnas que la tabla DEBE tener. Si falta alguna (por ejemplo, en un
-# .db creado antes de agregar la capa LLM), init_db() la agrega sola
-# con ALTER TABLE, sin tocar las filas existentes.
-COLUMNAS_REQUERIDAS = {
-    "analizado_por_llm": "INTEGER NOT NULL DEFAULT 0",
-    "llm_categoria": "TEXT",
-}
+DATABASE_URL = os.environ.get("DATABASE_URL")
+USE_POSTGRES = bool(DATABASE_URL)
+
+if USE_POSTGRES:
+    import psycopg2
+    import psycopg2.extras
 
 
-def get_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
+# ---------------------------------------------------------------------------
+# Conexion
+# ---------------------------------------------------------------------------
+def get_connection(db_path: Path | str = DEFAULT_DB_PATH):
+    if USE_POSTGRES:
+        # cursor_factory=RealDictCursor hace que las filas se puedan leer
+        # como row["columna"], igual que sqlite3.Row -- el resto del
+        # codigo no necesita saber cual backend esta usando.
+        return psycopg2.connect(DATABASE_URL, cursor_factory=psycopg2.extras.RealDictCursor)
+
     path = Path(db_path)
     path.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(str(path), check_same_thread=False)
@@ -39,51 +48,97 @@ def get_connection(db_path: Path | str = DEFAULT_DB_PATH) -> sqlite3.Connection:
     return conn
 
 
-def _migrar_columnas_faltantes(conn: sqlite3.Connection) -> None:
-    """Agrega columnas nuevas a una tabla 'analisis' ya existente, sin
-    perder los datos que ya tiene. CREATE TABLE IF NOT EXISTS no hace
-    nada si la tabla ya existe con un esquema viejo -- por eso hace
-    falta este paso aparte."""
-    columnas_actuales = {
-        row["name"] for row in conn.execute("PRAGMA table_info(analisis)").fetchall()
-    }
+# ---------------------------------------------------------------------------
+# Creacion de tabla + migracion automatica de columnas nuevas
+# ---------------------------------------------------------------------------
+COLUMNAS_REQUERIDAS = {
+    "analizado_por_llm": "INTEGER NOT NULL DEFAULT 0",
+    "llm_categoria": "TEXT",
+}
+
+
+def _columnas_existentes_pg(cur) -> set[str]:
+    cur.execute("""
+        SELECT column_name FROM information_schema.columns
+        WHERE table_name = 'analisis'
+    """)
+    return {row["column_name"] for row in cur.fetchall()}
+
+
+def _columnas_existentes_sqlite(cur) -> set[str]:
+    cur.execute("PRAGMA table_info(analisis)")
+    return {row["name"] for row in cur.fetchall()}
+
+
+def _migrar_columnas_faltantes(conn) -> None:
+    cur = conn.cursor()
+    existentes = _columnas_existentes_pg(cur) if USE_POSTGRES else _columnas_existentes_sqlite(cur)
     for columna, tipo_sql in COLUMNAS_REQUERIDAS.items():
-        if columna not in columnas_actuales:
+        if columna not in existentes:
             print(f"[db] Migrando: agregando columna '{columna}' a la tabla analisis")
-            conn.execute(f"ALTER TABLE analisis ADD COLUMN {columna} {tipo_sql}")
+            cur.execute(f"ALTER TABLE analisis ADD COLUMN {columna} {tipo_sql}")
     conn.commit()
 
 
 def init_db(db_path: Path | str = DEFAULT_DB_PATH) -> None:
     conn = get_connection(db_path)
     try:
-        conn.execute("""
-            CREATE TABLE IF NOT EXISTS analisis (
-                id               INTEGER PRIMARY KEY AUTOINCREMENT,
-                timestamp        TEXT NOT NULL,
-                texto            TEXT NOT NULL,
-                canal            TEXT NOT NULL,
-                remitente        TEXT,
-                score            REAL NOT NULL,
-                etiqueta         TEXT NOT NULL,
-                prob_modelo_ml   REAL,
-                motivos          TEXT,
-                indicadores      TEXT,
-                telegram_enviado INTEGER NOT NULL DEFAULT 0,
-                telegram_error   TEXT,
-                analizado_por_llm INTEGER NOT NULL DEFAULT 0,
-                llm_categoria    TEXT
-            )
-        """)
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_analisis_timestamp ON analisis(timestamp)")
-        conn.execute("CREATE INDEX IF NOT EXISTS idx_analisis_etiqueta ON analisis(etiqueta)")
+        cur = conn.cursor()
+        if USE_POSTGRES:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS analisis (
+                    id               SERIAL PRIMARY KEY,
+                    timestamp        TEXT NOT NULL,
+                    texto            TEXT NOT NULL,
+                    canal            TEXT NOT NULL,
+                    remitente        TEXT,
+                    score            REAL NOT NULL,
+                    etiqueta         TEXT NOT NULL,
+                    prob_modelo_ml   REAL,
+                    motivos          TEXT,
+                    indicadores      TEXT,
+                    telegram_enviado INTEGER NOT NULL DEFAULT 0,
+                    telegram_error   TEXT,
+                    analizado_por_llm INTEGER NOT NULL DEFAULT 0,
+                    llm_categoria    TEXT
+                )
+            """)
+        else:
+            cur.execute("""
+                CREATE TABLE IF NOT EXISTS analisis (
+                    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                    timestamp        TEXT NOT NULL,
+                    texto            TEXT NOT NULL,
+                    canal            TEXT NOT NULL,
+                    remitente        TEXT,
+                    score            REAL NOT NULL,
+                    etiqueta         TEXT NOT NULL,
+                    prob_modelo_ml   REAL,
+                    motivos          TEXT,
+                    indicadores      TEXT,
+                    telegram_enviado INTEGER NOT NULL DEFAULT 0,
+                    telegram_error   TEXT,
+                    analizado_por_llm INTEGER NOT NULL DEFAULT 0,
+                    llm_categoria    TEXT
+                )
+            """)
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_analisis_timestamp ON analisis(timestamp)")
+        cur.execute("CREATE INDEX IF NOT EXISTS idx_analisis_etiqueta ON analisis(etiqueta)")
         conn.commit()
 
-        # Si la tabla ya existia de antes (esquema viejo), esto agrega
-        # las columnas que falten sin borrar las filas actuales.
+        # Migra columnas nuevas en tablas que ya existian de antes
+        # (por ejemplo, una base SQLite vieja sin analizado_por_llm).
         _migrar_columnas_faltantes(conn)
     finally:
         conn.close()
+
+
+# ---------------------------------------------------------------------------
+# Escritura / lectura
+# ---------------------------------------------------------------------------
+def _placeholder() -> str:
+    """Postgres usa %s, SQLite usa ?."""
+    return "%s" if USE_POSTGRES else "?"
 
 
 def guardar_analisis(
@@ -104,34 +159,42 @@ def guardar_analisis(
 ) -> int:
     conn = get_connection(db_path)
     try:
-        cur = conn.execute(
-            """
+        cur = conn.cursor()
+        p = _placeholder()
+        query = f"""
             INSERT INTO analisis (
                 timestamp, texto, canal, remitente,
                 score, etiqueta, prob_modelo_ml,
                 motivos, indicadores,
                 telegram_enviado, telegram_error,
                 analizado_por_llm, llm_categoria
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """,
-            (
-                datetime.now(timezone.utc).isoformat(),
-                texto,
-                canal,
-                remitente,
-                score,
-                etiqueta,
-                prob_modelo_ml,
-                json.dumps(motivos, ensure_ascii=False),
-                json.dumps(indicadores, ensure_ascii=False),
-                1 if telegram_enviado else 0,
-                telegram_error,
-                1 if analizado_por_llm else 0,
-                llm_categoria,
-            ),
+            ) VALUES ({p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p}, {p})
+            {"RETURNING id" if USE_POSTGRES else ""}
+        """
+        params = (
+            datetime.now(timezone.utc).isoformat(),
+            texto,
+            canal,
+            remitente,
+            score,
+            etiqueta,
+            prob_modelo_ml,
+            json.dumps(motivos, ensure_ascii=False),
+            json.dumps(indicadores, ensure_ascii=False),
+            1 if telegram_enviado else 0,
+            telegram_error,
+            1 if analizado_por_llm else 0,
+            llm_categoria,
         )
+        cur.execute(query, params)
+
+        if USE_POSTGRES:
+            new_id = cur.fetchone()["id"]
+        else:
+            new_id = cur.lastrowid
+
         conn.commit()
-        return cur.lastrowid
+        return new_id
     finally:
         conn.close()
 
@@ -139,8 +202,10 @@ def guardar_analisis(
 def listar_ultimos(n: int = 20, db_path: Path | str = DEFAULT_DB_PATH) -> list[dict]:
     conn = get_connection(db_path)
     try:
-        rows = conn.execute(
-            """
+        cur = conn.cursor()
+        p = _placeholder()
+        cur.execute(
+            f"""
             SELECT id, timestamp, texto, canal, remitente,
                    score, etiqueta, prob_modelo_ml,
                    motivos, indicadores,
@@ -148,10 +213,11 @@ def listar_ultimos(n: int = 20, db_path: Path | str = DEFAULT_DB_PATH) -> list[d
                    analizado_por_llm, llm_categoria
             FROM analisis
             ORDER BY id DESC
-            LIMIT ?
+            LIMIT {p}
             """,
             (n,),
-        ).fetchall()
+        )
+        rows = cur.fetchall()
         result = []
         for r in rows:
             result.append({

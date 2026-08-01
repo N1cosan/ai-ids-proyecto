@@ -228,30 +228,33 @@ def estadisticas(_auth: bool = Depends(verificar_api_key)):
     """Resumen rápido de los análisis guardados."""
     from src.phishing.db import get_connection
  
-    conn = get_connection()
+conn = get_connection()
     try:
-        total = conn.execute("SELECT COUNT(*) FROM analisis").fetchone()[0]
- 
-        por_etiqueta = conn.execute("""
+        cur = conn.cursor()
+
+        cur.execute("SELECT COUNT(*) AS total FROM analisis")
+        total = cur.fetchone()["total"]
+
+        cur.execute("""
             SELECT etiqueta, COUNT(*) as cantidad
             FROM analisis
             GROUP BY etiqueta
-        """).fetchall()
- 
-        telegram_enviados = conn.execute("""
-            SELECT COUNT(*) FROM analisis WHERE telegram_enviado = 1
-        """).fetchone()[0]
- 
-        score_promedio = conn.execute("""
-            SELECT ROUND(AVG(score), 1) FROM analisis
-        """).fetchone()[0]
- 
-        ultimo = conn.execute("""
+        """)
+        por_etiqueta = cur.fetchall()
+
+        cur.execute("SELECT COUNT(*) AS cantidad FROM analisis WHERE telegram_enviado = 1")
+        telegram_enviados = cur.fetchone()["cantidad"]
+
+        cur.execute("SELECT ROUND(AVG(score), 1) AS promedio FROM analisis")
+        score_promedio = cur.fetchone()["promedio"]
+
+        cur.execute("""
             SELECT timestamp, texto, score, etiqueta
             FROM analisis
             ORDER BY id DESC
             LIMIT 1
-        """).fetchone()
+        """)
+        ultimo = cur.fetchone()
  
         return {
             "total_analisis": total,
