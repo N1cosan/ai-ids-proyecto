@@ -168,8 +168,22 @@ _ALL_LEXICONS = {
 }
  
  
-def _find_matches(texto_norm: str, lexicon: list[str]) -> list[str]:
-    return [term for term in lexicon if term in texto_norm]
+def _compilar_lexicon(lexicon: list[str]) -> list[tuple[str, re.Pattern]]:
+    """Compila cada término del léxico con límites de palabra (\\b) para
+    que un término corto como 'envia' NO haga match dentro de otra
+    palabra que solo lo contiene como substring ('enviado', 'enviamos',
+    'envían'). Antes el matching era 'term in texto_norm' (substring
+    simple), lo que generaba falsos positivos silenciosos: cualquier
+    palabra que contuviera un término del léxico como fragmento
+    disparaba esa categoría aunque no tuviera relación semántica."""
+    return [(term, re.compile(r"\b" + re.escape(term) + r"\b")) for term in lexicon]
+ 
+ 
+_COMPILED_LEXICONS = {cat: _compilar_lexicon(lex) for cat, lex in _ALL_LEXICONS.items()}
+ 
+ 
+def _find_matches(texto_norm: str, compiled_terms: list[tuple[str, re.Pattern]]) -> list[str]:
+    return [term for term, pattern in compiled_terms if pattern.search(texto_norm)]
  
  
 @dataclass
@@ -193,7 +207,7 @@ def extract_content_signals(texto: str) -> ContentSignals:
     devuelve señales estructuradas listas para explain.py y detector.py."""
     texto_norm = normalize_text(texto)
  
-    matches = {cat: _find_matches(texto_norm, lex) for cat, lex in _ALL_LEXICONS.items()}
+    matches = {cat: _find_matches(texto_norm, compiled) for cat, compiled in _COMPILED_LEXICONS.items()}
  
     marcas = matches["marca_suplantada"]
     marca_detectada = marcas[0] if marcas else None
