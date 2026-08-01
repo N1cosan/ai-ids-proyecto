@@ -1,3 +1,4 @@
+
 """
 detector.py
 ------------
@@ -148,6 +149,10 @@ class PhishingDetector:
             motivos.append(f"Menciona la marca/entidad '{señales_contenido.marca_detectada}'")
         if señales_contenido.matches.get("estafa_whatsapp"):
             motivos.append("Coincide con un patrón típico de estafa de familiar o robo de cuenta por WhatsApp")
+        if señales_contenido.matches.get("oferta_falsa"):
+            motivos.append("Ofrece un proyecto/oportunidad y pide contactar por un correo personal, fuera del canal oficial")
+        if señales_contenido.matches.get("estafa_herencia"):
+            motivos.append("Coincide con el fraude clásico de 'herencia/fondos atrapados' donde te ofrecen ser beneficiario de una fortuna ajena")
         if señales_contenido.tiene_urgencia:
             motivos.append("Usa lenguaje de urgencia o presión")
         if señales_contenido.tiene_solicitud_credenciales:

@@ -132,6 +132,23 @@ WHATSAPP_ESTAFAS = [
     "ingresa el codigo", "ingresa el código", "envia el codigo", "envía el código",
 ]
  
+OFERTAS_FALSAS = [
+    "oferta de proyecto", "contacta mi correo", "correo electronico privado",
+    "correo electrónico privado", "mi correo personal", "escribeme a este correo",
+    "escríbeme a este correo", "para mas detalles contactame", "para más detalles contáctame",
+    "contactame a este correo", "contáctame a este correo",
+]
+ 
+ESTAFA_HERENCIA = [
+    "cliente fallecido", "suma considerable", "cuenta no reclamada",
+    "bienes no reclamados", "tramites sucesorios", "trámites sucesorios",
+    "administrador de la cuenta", "beneficiario y administrador",
+    "abogado principal", "registro de bienes", "proximo de kin",
+    "próximo de kin", "next of kin", "fallecio sin dejar", "falleció sin dejar",
+    "herencia sin reclamar", "fondos en custodia", "reclamar la herencia",
+    "compensacion por transferencia", "compensación por transferencia",
+]
+ 
 PREMIOS_GANCHOS = [
     "ganaste", "has sido seleccionado", "has sido seleccionada",
     "reclama tu premio", "sorteo", "regalo", "beneficiario",
@@ -146,6 +163,8 @@ _ALL_LEXICONS = {
     "solicitud_datos_sensibles": SOLICITUD_DATOS,
     "estafa_whatsapp": WHATSAPP_ESTAFAS,
     "premio_gancho": PREMIOS_GANCHOS,
+    "oferta_falsa": OFERTAS_FALSAS,
+    "estafa_herencia": ESTAFA_HERENCIA,
 }
  
  
@@ -198,6 +217,8 @@ def extract_content_signals(texto: str) -> ContentSignals:
         "soporte_tecnico_falso": 0.15,
         "estafa_whatsapp": 0.50,   # sube de 0.35 a 0.50
         "premio_gancho": 0.15,
+        "oferta_falsa": 0.25,
+        "estafa_herencia": 0.45,
     }
     score = sum(pesos[cat] for cat, terms in matches.items() if terms)
     score = min(score, 1.0)
