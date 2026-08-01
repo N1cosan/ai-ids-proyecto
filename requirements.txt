@@ -16,3 +16,4 @@ python-dotenv>=1.0.0
 
 # === Utilidades ===
 # (sqlite3 viene en la librería estándar de Python, no se instala)
+psycopg2-binary>=2.9
