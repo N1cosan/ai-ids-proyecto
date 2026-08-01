@@ -20,13 +20,13 @@ import joblib
 
 BASE_DIR = Path(__file__).resolve().parents[2]
 MODEL_DIR = BASE_DIR / "models"
-DATA_PATH = BASE_DIR / "data" / "processed" / "monday_wednesday_clean.csv"
+DATA_PATH = BASE_DIR / "data" / "processed" / "full_clean_v4.csv"
 
-ROUND = "round2"
+ROUND = "v4_base"
 
-model = joblib.load(MODEL_DIR / f"rf_model_robust_{ROUND}.joblib")
-label_encoder = joblib.load(MODEL_DIR / f"label_encoder_robust_{ROUND}.joblib")
-feature_columns = joblib.load(MODEL_DIR / f"feature_columns_robust_{ROUND}.joblib")
+model = joblib.load(MODEL_DIR / f"rf_model_{ROUND}.joblib")
+label_encoder = joblib.load(MODEL_DIR / f"label_encoder_{ROUND}.joblib")
+feature_columns = joblib.load(MODEL_DIR / f"feature_columns_{ROUND}.joblib")
 
 df = pd.read_csv(DATA_PATH)
 df = df[df["Label"] != "Heartbleed"]

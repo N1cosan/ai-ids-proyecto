@@ -1,29 +1,13 @@
-﻿"""
-alertas_telegram.py — Envía alertas a Telegram cuando el análisis es phishing
-o sospechoso con score >= 50.
-"""
-from __future__ import annotations
-
-import html
-import os
-from typing import Optional
-
-from dotenv import load_dotenv
-import httpx
-
-load_dotenv()
-
-TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
-TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
-
-ETIQUETAS_ALERTA = {"phishing"}
-SCORE_MINIMO_SOSPECHOSO = 50
-
-
-async def enviar_alerta_telegram(
+﻿async def enviar_alerta_telegram(
     resultado: dict,
     texto_original: str = "",
 ) -> Optional[dict]:
+    """
+    Devuelve:
+      - dict de respuesta de Telegram  → éxito
+      - None                          → no se debe alertar o no hay credenciales
+      - {"error": "..."}              → se intentó alertar pero falló
+    """
     etiqueta = resultado.get("etiqueta", "")
     score = float(resultado.get("score", 0))
 
@@ -36,7 +20,7 @@ async def enviar_alerta_telegram(
 
     if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
         print("[telegram] Token o chat_id no configurados (revisa .env)")
-        return None
+        return {"error": "TELEGRAM_BOT_TOKEN o TELEGRAM_CHAT_ID no configurados"}
 
     canal = resultado.get("canal", "?")
     motivos = resultado.get("motivos") or []
@@ -45,16 +29,15 @@ async def enviar_alerta_telegram(
 
     raw_preview = (texto_original[:180] + "...") if len(texto_original) > 180 else texto_original
     preview = html.escape(raw_preview)
-    
-    motivos_txt = "\n".join(f"- {html.escape(m)}" for m in motivos) or "- (sin motivos detallados)"
+    motivos_txt = "\n".join(f"- {html.escape(str(m))}" for m in motivos) or "- (sin motivos detallados)"
 
     mensaje = (
-        f"<b>{html.escape(resumen)}</b>\n\n"
+        f"<b>{html.escape(str(resumen))}</b>\n\n"
         f"<b>Canal:</b> {html.escape(str(canal))}\n"
         f"<b>Score:</b> {score}/100\n\n"
         f"<b>Motivos:</b>\n{motivos_txt}\n\n"
         f"<b>Mensaje analizado:</b>\n<code>{preview}</code>\n\n"
-        f"{html.escape(explicacion)}"
+        f"{html.escape(str(explicacion))}"
     )
 
     url = f"https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage"

@@ -13,7 +13,8 @@ Para correr:
 
 (ejecutar desde la carpeta raiz del proyecto, ai-ids/)
 """
-
+from fastapi import BackgroundTasks
+from src.api.alertas_telegram import enviar_alerta_telegram
 from pathlib import Path
 from typing import Dict
 
@@ -37,9 +38,9 @@ MODEL_DIR = BASE_DIR / "models"
 # del v1 original, que demostramos vulnerable a evasion (80-100%).
 MODEL_VERSION = "robust_round2"
 
-model = joblib.load(MODEL_DIR / f"rf_model_{MODEL_VERSION}.joblib")
-label_encoder = joblib.load(MODEL_DIR / f"label_encoder_{MODEL_VERSION}.joblib")
-feature_columns = joblib.load(MODEL_DIR / f"feature_columns_{MODEL_VERSION}.joblib")
+model = joblib.load(MODEL_DIR / "rf_model_robust_v3_round3.joblib")
+label_encoder = joblib.load(MODEL_DIR / "label_encoder_robust_v3_round3.joblib")
+feature_columns = joblib.load(MODEL_DIR / "feature_columns_robust_v3_round3.joblib")
 explainer = shap.TreeExplainer(model)
 
 
@@ -74,7 +75,7 @@ def health():
 
 
 @app.post("/predict", response_model=PredictionResponse)
-def predict(flow: TrafficFlow):
+def predict(flow: TrafficFlow, background_tasks: BackgroundTasks):
     input_features = flow.features
 
     missing = set(feature_columns) - set(input_features.keys())
@@ -109,6 +110,13 @@ def predict(flow: TrafficFlow):
     ]
 
     report = build_report(predicted_class, confidence, top_contributing_features)
+    background_tasks.add_task(enviar_alerta_telegram, {
+        "predicted_class": predicted_class,
+        "confidence": confidence,
+        "is_attack": predicted_class != "BENIGN",
+        "top_contributing_features": top_contributing_features,
+        "report": report,
+    })
 
     return PredictionResponse(
         predicted_class=predicted_class,

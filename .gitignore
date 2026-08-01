@@ -36,3 +36,5 @@ temp/
 # Datasets grandes de red (CICIDS) - no subir a GitHub
 data/raw/*.csv
 data/processed/*.csv
+models/*.joblib
+
