@@ -4,20 +4,20 @@ url_analyzer.py
 Señales de URL/dominio: acortadores, homógrafos, imitación de marcas
 colombianas, TLDs poco comunes para banca, IPs literales, exceso de
 subdominios, etc.
-
+ 
 No requiere librerías externas (solo stdlib) para mantener el MVP
 simple de instalar. Si más adelante se quiere resolución DNS/WHOIS en
 vivo, eso se añade en un archivo aparte (por ejemplo url_reputation.py)
 para no acoplar la lógica offline con llamadas de red.
 """
-
+ 
 from __future__ import annotations
-
+ 
 import re
 from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from urllib.parse import urlparse
-
+ 
 # Captura URLs con esquema/www, y además cualquier "dominio.tld" plausible
 # (2-24 letras de TLD) seguido opcionalmente de una ruta, para no depender
 # de una lista fija de extensiones (necesario para detectar acortadores
@@ -26,14 +26,21 @@ URL_PATTERN = re.compile(
     r"(https?://\S+|www\.\S+|\b[a-z0-9][a-z0-9\-]*(?:\.[a-z0-9][a-z0-9\-]*)*\.[a-z]{2,24}(?:/\S*)?)",
     re.IGNORECASE,
 )
-
+ 
 ACORTADORES = {
     "bit.ly", "tinyurl.com", "t.co", "goo.gl", "is.gd", "cutt.ly",
     "rebrand.ly", "shorturl.at", "acortaurl.com", "bit.do", "rb.gy",
 }
-
+ 
 TLDS_SOSPECHOSOS = {".xyz", ".top", ".click", ".shop", ".site", ".online", ".live", ".icu", ".fit"}
-
+ 
+# Dominios institucionales colombianos (gobierno, educación, fuerzas
+# militares) que legítimamente usan estructuras con varios subdominios
+# (ej: jprmpalsjrioseco@cendoj.ramajudicial.gov.co). No se les aplica
+# la penalización por "muchos subdominios" para no marcar como
+# sospechosas comunicaciones institucionales reales.
+TLDS_INSTITUCIONALES_CO = {".gov.co", ".edu.co", ".mil.co"}
+ 
 # Dominios legítimos conocidos (whitelist mínima) — usados como referencia
 # para detectar imitaciones, NO como lista exhaustiva de "todo lo demás
 # es phishing".
@@ -43,13 +50,13 @@ DOMINIOS_LEGITIMOS_CO = [
     "movistar.co", "tigo.com.co", "servientrega.com", "coordinadora.com",
     "wompi.co", "pse.com.co",
 ]
-
+ 
 MARCAS_CLAVE = [
     "bancolombia", "davivienda", "nequi", "daviplata", "dian", "claro",
     "movistar", "tigo", "servientrega", "pse", "bbva",
 ]
-
-
+ 
+ 
 @dataclass
 class UrlSignal:
     url: str
@@ -63,12 +70,12 @@ class UrlSignal:
     similitud_maxima: float = 0.0
     indicadores: list[str] = field(default_factory=list)
     score: float = 0.0
-
-
+ 
+ 
 def extract_urls(texto: str) -> list[str]:
     return [m.group(0).rstrip(").,;") for m in URL_PATTERN.finditer(texto)]
-
-
+ 
+ 
 def _dominio_de(url: str) -> str:
     if not re.match(r"^https?://", url, re.IGNORECASE):
         url = "http://" + url
@@ -76,41 +83,42 @@ def _dominio_de(url: str) -> str:
         return urlparse(url).netloc.lower()
     except Exception:
         return url.lower()
-
-
+ 
+ 
 def _similitud(a: str, b: str) -> float:
     return SequenceMatcher(None, a, b).ratio()
-
-
+ 
+ 
 def analyze_url(url: str) -> UrlSignal:
     dominio = _dominio_de(url)
     dominio_sin_puerto = dominio.split(":")[0]
-
+ 
     señal = UrlSignal(url=url, dominio=dominio_sin_puerto)
-
+ 
     # IP literal en vez de dominio
     if re.match(r"^\d{1,3}(\.\d{1,3}){3}$", dominio_sin_puerto):
         señal.es_ip_literal = True
         señal.indicadores.append("El enlace usa una dirección IP en vez de un dominio")
-
+ 
     # Acortadores
     if dominio_sin_puerto in ACORTADORES:
         señal.usa_acortador = True
         señal.indicadores.append("El enlace usa un acortador que oculta el destino real")
-
+ 
     # TLD sospechoso
     for tld in TLDS_SOSPECHOSOS:
         if dominio_sin_puerto.endswith(tld):
             señal.tld_sospechoso = True
             señal.indicadores.append(f"El dominio usa una extensión poco común para banca/gobierno ({tld})")
             break
-
+ 
     # Subdominios excesivos (ej: bancolombia.seguridad.verificar-ahora.xyz)
+    es_institucional_co = any(dominio_sin_puerto.endswith(tld) for tld in TLDS_INSTITUCIONALES_CO)
     partes = dominio_sin_puerto.split(".")
     señal.num_subdominios = max(len(partes) - 2, 0)
-    if señal.num_subdominios >= 2:
+    if señal.num_subdominios >= 2 and not es_institucional_co:
         señal.indicadores.append("El dominio tiene muchos subdominios, común para disfrazar el sitio real")
-
+ 
     # Marca colombiana mencionada en el dominio pero NO es el dominio oficial
     for marca in MARCAS_CLAVE:
         if marca in dominio_sin_puerto:
@@ -121,7 +129,7 @@ def analyze_url(url: str) -> UrlSignal:
                     f"El dominio menciona '{marca}' pero no corresponde al dominio oficial de esa entidad"
                 )
             break
-
+ 
     # Homógrafos / typosquatting: comparar contra dominios legítimos conocidos
     mejor_similitud = 0.0
     mejor_match = None
@@ -139,7 +147,7 @@ def analyze_url(url: str) -> UrlSignal:
         señal.indicadores.append(
             f"El dominio se parece mucho a '{mejor_match}' pero no es igual (posible imitación)"
         )
-
+ 
     # Score agregado de esta URL
     pesos = {
         "es_ip_literal": 0.40,
@@ -159,12 +167,12 @@ def analyze_url(url: str) -> UrlSignal:
         score += pesos["marca_en_subdominio_o_ruta"]
     if señal.posible_homografo_de:
         score += pesos["posible_homografo_de"]
-    if señal.num_subdominios >= 2:
+    if señal.num_subdominios >= 2 and not es_institucional_co:
         score += 0.10
     señal.score = min(score, 1.0)
     return señal
-
-
+ 
+ 
 def analyze_urls_in_text(texto: str, urls_extra: list[str] | None = None) -> list[UrlSignal]:
     """Extrae URLs del texto (más las pasadas explícitamente en
     `urls_extra`, útil cuando el canal ya las separa, como en payloads
