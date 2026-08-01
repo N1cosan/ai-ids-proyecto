@@ -155,6 +155,20 @@ PREMIOS_GANCHOS = [
     "subsidio", "bono", "devolucion de saldo", "devolución de saldo",
     "promocion exclusiva", "promoción exclusiva", "oferta limitada",
 ]
+
+# Ganchos típicos de casas de apuestas/casino online (frecuentes en
+# phishing con "display name spoofing" — ver url_analyzer.py). Se
+# mantienen en categoría propia, separada de PREMIOS_GANCHOS, porque
+# operadores de apuestas legales en Colombia sí mandan este tipo de
+# marketing por email a suscriptores reales; el peso queda moderado
+# para no sobre-marcar promociones legítimas por sí solas — la señal
+# fuerte real es la de suplantación de remitente.
+APUESTAS_GANCHO = [
+    "primer deposito", "primer depósito", "bono de bienvenida",
+    "apuesta en el mundial", "duplica tu deposito", "duplica tu depósito",
+    "duplicamos tu deposito", "duplicamos tu depósito", "giros gratis",
+    "deposito minimo", "depósito mínimo", "casa de apuestas",
+]
  
 _ALL_LEXICONS = {
     "urgencia": URGENCIA,
@@ -163,11 +177,12 @@ _ALL_LEXICONS = {
     "solicitud_datos_sensibles": SOLICITUD_DATOS,
     "estafa_whatsapp": WHATSAPP_ESTAFAS,
     "premio_gancho": PREMIOS_GANCHOS,
+    "apuestas_gancho": APUESTAS_GANCHO,
     "oferta_falsa": OFERTAS_FALSAS,
     "estafa_herencia": ESTAFA_HERENCIA,
 }
- 
- 
+
+
 def _compilar_lexicon(lexicon: list[str]) -> list[tuple[str, re.Pattern]]:
     """Compila cada término del léxico con límites de palabra (\\b) para
     que un término corto como 'envia' NO haga match dentro de otra
@@ -177,11 +192,11 @@ def _compilar_lexicon(lexicon: list[str]) -> list[tuple[str, re.Pattern]]:
     palabra que contuviera un término del léxico como fragmento
     disparaba esa categoría aunque no tuviera relación semántica."""
     return [(term, re.compile(r"\b" + re.escape(term) + r"\b")) for term in lexicon]
- 
- 
+
+
 _COMPILED_LEXICONS = {cat: _compilar_lexicon(lex) for cat, lex in _ALL_LEXICONS.items()}
- 
- 
+
+
 def _find_matches(texto_norm: str, compiled_terms: list[tuple[str, re.Pattern]]) -> list[str]:
     return [term for term, pattern in compiled_terms if pattern.search(texto_norm)]
  
@@ -231,6 +246,7 @@ def extract_content_signals(texto: str) -> ContentSignals:
         "soporte_tecnico_falso": 0.15,
         "estafa_whatsapp": 0.50,   # sube de 0.35 a 0.50
         "premio_gancho": 0.15,
+        "apuestas_gancho": 0.15,
         "oferta_falsa": 0.25,
         "estafa_herencia": 0.45,
     }

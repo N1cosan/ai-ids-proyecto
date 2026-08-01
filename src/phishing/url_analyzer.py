@@ -18,6 +18,11 @@ from dataclasses import dataclass, field
 from difflib import SequenceMatcher
 from urllib.parse import urlparse
  
+try:
+    from src.phishing.features import normalize_text
+except ImportError:  # ejecución directa dentro de la carpeta phishing/
+    from features import normalize_text
+ 
 # Captura URLs con esquema/www, y además cualquier "dominio.tld" plausible
 # (2-24 letras de TLD) seguido opcionalmente de una ruta, para no depender
 # de una lista fija de extensiones (necesario para detectar acortadores
@@ -55,6 +60,74 @@ MARCAS_CLAVE = [
     "bancolombia", "davivienda", "nequi", "daviplata", "dian", "claro",
     "movistar", "tigo", "servientrega", "pse", "bbva",
 ]
+ 
+# Marcas/entidades que además de las colombianas se usan seguido para
+# suplantar el NOMBRE VISIBLE del remitente en phishing (casas de
+# apuestas, servicios internacionales). Esta lista es más amplia que
+# MARCAS_CLAVE a propósito: para el chequeo de "nombre visible del
+# remitente vs. dominio real" conviene cubrir más marcas, porque acá
+# no estamos comparando contra una whitelist de dominios legítimos
+# (que sí requeriría mantenerla actualizada) sino solo detectando que
+# el nombre y el dominio del MISMO correo no coinciden entre sí.
+MARCAS_SUPLANTABLES = set(MARCAS_CLAVE) | {
+    "1xbet", "betplay", "wplay", "rushbet", "codere", "stake", "bet365",
+    "netflix", "amazon", "apple", "microsoft", "paypal", "google",
+    "instagram", "facebook", "whatsapp", "soat", "efecty", "baloto",
+}
+ 
+# Patrón para extraer "Nombre visible <email@dominio>" de encabezados
+# tipo "De:"/"From:" — frecuentes cuando alguien pega un correo
+# reenviado o citado (el caso más común que vamos a recibir).
+PATRON_REMITENTE = re.compile(
+    r"(?:de|from)\s*:\s*([^<>\n]{1,60}?)\s*<\s*([a-z0-9_.+-]+@[a-z0-9.-]+\.[a-z]{2,24})\s*>",
+    re.IGNORECASE,
+)
+ 
+ 
+@dataclass
+class SenalRemitente:
+    nombre_visible: str
+    email: str
+    dominio: str
+    marca_detectada: str | None = None
+    es_spoofing: bool = False
+    indicadores: list[str] = field(default_factory=list)
+ 
+ 
+def analizar_remitente_en_texto(texto: str) -> list[SenalRemitente]:
+    """Busca patrones 'De: Marca <correo@dominio>' en el texto y detecta
+    'display name spoofing': cuando el NOMBRE VISIBLE del remitente
+    menciona una marca conocida pero el DOMINIO real del correo no
+    corresponde a esa marca (ej: 'De: 1xbet <campaigns@ciravor.com>').
+ 
+    Es una técnica de phishing muy común porque la mayoría de clientes
+    de correo muestran el nombre visible más grande que la dirección
+    real. A diferencia de otras señales de este módulo, esta NO
+    depende de saber cuál es el dominio "oficial" de la marca — solo
+    compara el nombre y el dominio dentro del MISMO correo, así que es
+    una comparación 100% verificable con el propio texto."""
+    resultados: list[SenalRemitente] = []
+    for match in PATRON_REMITENTE.finditer(texto):
+        nombre_visible = match.group(1).strip().strip("\"'")
+        email = match.group(2).strip().lower()
+        dominio = email.split("@")[-1]
+ 
+        nombre_norm = normalize_text(nombre_visible)
+        marca_en_nombre = next(
+            (m for m in MARCAS_SUPLANTABLES if re.search(rf"\b{re.escape(m)}\b", nombre_norm)),
+            None,
+        )
+ 
+        señal = SenalRemitente(nombre_visible=nombre_visible, email=email, dominio=dominio)
+        if marca_en_nombre and marca_en_nombre not in dominio:
+            señal.marca_detectada = marca_en_nombre
+            señal.es_spoofing = True
+            señal.indicadores.append(
+                f"El remitente se muestra como '{nombre_visible}' pero el correo real "
+                f"({dominio}) no corresponde a esa marca — posible suplantación de remitente"
+            )
+        resultados.append(señal)
+    return resultados
  
  
 @dataclass

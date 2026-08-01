@@ -25,11 +25,11 @@ import joblib
  
 try:
     from src.phishing.features import clean_for_tfidf, extract_content_signals
-    from src.phishing.url_analyzer import analyze_urls_in_text
+    from src.phishing.url_analyzer import analyze_urls_in_text, analizar_remitente_en_texto
     from src.phishing.llm_classifier import clasificar_con_llm
 except ImportError:  # ejecución directa dentro de la carpeta phishing/
     from features import clean_for_tfidf, extract_content_signals
-    from url_analyzer import analyze_urls_in_text
+    from url_analyzer import analyze_urls_in_text, analizar_remitente_en_texto
     from llm_classifier import clasificar_con_llm
  
 DEFAULT_MODEL_PATH = Path("models/phishing/phishing_pipeline.joblib")
@@ -44,6 +44,13 @@ UMBRAL_SOSPECHOSO = 40         # se mantiene
 BONUS_LLM_CONFIANZA_ALTA = 35
 BONUS_LLM_CONFIANZA_MEDIA = 15
 UMBRAL_LLM_CONFIANZA_ALTA = 0.7
+
+# Bonus fijo cuando se detecta "display name spoofing" (ver
+# url_analyzer.py: analizar_remitente_en_texto): el nombre visible del
+# remitente menciona una marca pero el dominio real no corresponde.
+# Es una señal determinística verificable dentro del propio texto, no
+# depende del LLM ni de una whitelist de dominios oficiales.
+BONUS_DISPLAY_NAME_SPOOFING = 35
  
 # Cómo se combinan las 3 fuentes de evidencia en el score final.
 # El modelo ML pesa más porque generaliza mejor con más datos,
@@ -119,6 +126,12 @@ class PhishingDetector:
         # 3. Reglas de URL
         señales_url = analyze_urls_in_text(texto, urls_extra=urls)
         score_url = max((u.score for u in señales_url), default=0.0)
+
+        # 3.5 Display name spoofing: nombre visible del remitente vs.
+        # dominio real del correo (comparación dentro del propio texto,
+        # no depende de una whitelist de dominios oficiales).
+        señales_remitente = analizar_remitente_en_texto(texto)
+        spoofing_detectado = next((s for s in señales_remitente if s.es_spoofing), None)
  
         # Combinar en score final 0-100
         score_final = (
@@ -127,7 +140,10 @@ class PhishingDetector:
             + PESO_REGLAS_URL * score_url
         ) * 100
         score_final = min(max(score_final, 0.0), 100.0)
- 
+
+        if spoofing_detectado:
+            score_final = min(score_final + BONUS_DISPLAY_NAME_SPOOFING, 100.0)
+
         # 4. Capa de respaldo: LLM (solo si el score de reglas+ML es
         # ambiguo — ver llm_classifier.py para el criterio exacto).
         # Nunca baja el score, solo puede subirlo.
@@ -139,7 +155,8 @@ class PhishingDetector:
                 else BONUS_LLM_CONFIANZA_MEDIA
             )
             score_final = min(score_final + bonus, 100.0)
- 
+
+
         if score_final >= UMBRAL_PHISHING:
             etiqueta = "phishing"
         elif score_final >= UMBRAL_SOSPECHOSO:
@@ -147,7 +164,7 @@ class PhishingDetector:
         else:
             etiqueta = "legitimo"
  
-        motivos = self._construir_motivos(señales_contenido, señales_url, prob_ml, resultado_llm)
+        motivos = self._construir_motivos(señales_contenido, señales_url, prob_ml, resultado_llm, spoofing_detectado)
  
         return ResultadoAnalisis(
             texto=texto,
@@ -169,8 +186,10 @@ class PhishingDetector:
         )
  
     @staticmethod
-    def _construir_motivos(señales_contenido, señales_url, prob_ml, resultado_llm=None) -> list[str]:
+    def _construir_motivos(señales_contenido, señales_url, prob_ml, resultado_llm=None, spoofing_detectado=None) -> list[str]:
         motivos = []
+        if spoofing_detectado:
+            motivos.extend(spoofing_detectado.indicadores)
         if señales_contenido.marca_detectada:
             motivos.append(f"Menciona la marca/entidad '{señales_contenido.marca_detectada}'")
         if señales_contenido.matches.get("estafa_whatsapp"):
