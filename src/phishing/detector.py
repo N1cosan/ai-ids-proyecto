@@ -1,4 +1,3 @@
-
 """
 detector.py
 ------------
@@ -27,15 +26,24 @@ import joblib
 try:
     from src.phishing.features import clean_for_tfidf, extract_content_signals
     from src.phishing.url_analyzer import analyze_urls_in_text
+    from src.phishing.llm_classifier import clasificar_con_llm
 except ImportError:  # ejecución directa dentro de la carpeta phishing/
     from features import clean_for_tfidf, extract_content_signals
     from url_analyzer import analyze_urls_in_text
+    from llm_classifier import clasificar_con_llm
  
 DEFAULT_MODEL_PATH = Path("models/phishing/phishing_pipeline.joblib")
  
 # Umbrales para la etiqueta final (score 0-100)
 UMBRAL_PHISHING = 60           # antes 70
 UMBRAL_SOSPECHOSO = 40         # se mantiene
+ 
+# Cuánto sube el score si el LLM (capa de respaldo) marca el mensaje
+# como sospechoso. Más alto si el LLM reporta confianza >= 0.7. El LLM
+# nunca puede BAJAR un score que las reglas ya subieron — solo suma.
+BONUS_LLM_CONFIANZA_ALTA = 35
+BONUS_LLM_CONFIANZA_MEDIA = 15
+UMBRAL_LLM_CONFIANZA_ALTA = 0.7
  
 # Cómo se combinan las 3 fuentes de evidencia en el score final.
 # El modelo ML pesa más porque generaliza mejor con más datos,
@@ -57,6 +65,8 @@ class ResultadoAnalisis:
     indicadores: dict = field(default_factory=dict)
     prob_modelo_ml: float | None = None
     urls_analizadas: list = field(default_factory=list)
+    analizado_por_llm: bool = False
+    llm_categoria: str | None = None
  
     def to_dict(self) -> dict:
         return {
@@ -68,6 +78,8 @@ class ResultadoAnalisis:
             "indicadores": self.indicadores,
             "prob_modelo_ml": self.prob_modelo_ml,
             "urls": [u.__dict__ for u in self.urls_analizadas],
+            "analizado_por_llm": self.analizado_por_llm,
+            "llm_categoria": self.llm_categoria,
         }
  
  
@@ -116,6 +128,18 @@ class PhishingDetector:
         ) * 100
         score_final = min(max(score_final, 0.0), 100.0)
  
+        # 4. Capa de respaldo: LLM (solo si el score de reglas+ML es
+        # ambiguo — ver llm_classifier.py para el criterio exacto).
+        # Nunca baja el score, solo puede subirlo.
+        resultado_llm = clasificar_con_llm(texto, score_reglas_ml=score_final)
+        if resultado_llm and resultado_llm.es_sospechoso:
+            bonus = (
+                BONUS_LLM_CONFIANZA_ALTA
+                if resultado_llm.confianza >= UMBRAL_LLM_CONFIANZA_ALTA
+                else BONUS_LLM_CONFIANZA_MEDIA
+            )
+            score_final = min(score_final + bonus, 100.0)
+ 
         if score_final >= UMBRAL_PHISHING:
             etiqueta = "phishing"
         elif score_final >= UMBRAL_SOSPECHOSO:
@@ -123,7 +147,7 @@ class PhishingDetector:
         else:
             etiqueta = "legitimo"
  
-        motivos = self._construir_motivos(señales_contenido, señales_url, prob_ml)
+        motivos = self._construir_motivos(señales_contenido, señales_url, prob_ml, resultado_llm)
  
         return ResultadoAnalisis(
             texto=texto,
@@ -140,10 +164,12 @@ class PhishingDetector:
             },
             prob_modelo_ml=round(prob_ml, 3),
             urls_analizadas=señales_url,
+            analizado_por_llm=resultado_llm is not None,
+            llm_categoria=resultado_llm.categoria if resultado_llm else None,
         )
  
     @staticmethod
-    def _construir_motivos(señales_contenido, señales_url, prob_ml) -> list[str]:
+    def _construir_motivos(señales_contenido, señales_url, prob_ml, resultado_llm=None) -> list[str]:
         motivos = []
         if señales_contenido.marca_detectada:
             motivos.append(f"Menciona la marca/entidad '{señales_contenido.marca_detectada}'")
@@ -163,6 +189,8 @@ class PhishingDetector:
             motivos.extend(u.indicadores)
         if prob_ml >= 0.7:
             motivos.append("El modelo de lenguaje entrenado reconoce un patrón típico de phishing")
+        if resultado_llm and resultado_llm.es_sospechoso and resultado_llm.motivo:
+            motivos.append(f"Análisis con IA ({resultado_llm.categoria}): {resultado_llm.motivo}")
         return motivos
  
  

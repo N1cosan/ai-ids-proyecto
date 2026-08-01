@@ -1,10 +1,2 @@
-# Dependencias específicas del módulo src/phishing
-# (independiente de los requirements del AI-IDS de red)
-
-pandas>=2.0
-scikit-learn>=1.3
-joblib>=1.3
-
-# Nota: url_analyzer.py y features.py usan solo stdlib (re, difflib,
-# unicodedata, urllib.parse) a propósito, para que este módulo pese poco
-# y no dependa de librerías con posibles restricciones de licencia.
+# Capa LLM (llm_classifier.py) — llamadas HTTP a la API de Anthropic
+httpx>=0.24
