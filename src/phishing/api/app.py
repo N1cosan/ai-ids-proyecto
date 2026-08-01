@@ -1,4 +1,4 @@
-﻿"""
+"""
 FastAPI — THE TRUTH ENGINE (Capa de Texto / Anti-Phishing)
 POST /analyze -> analyze_message() + alerta Telegram si corresponde
 Protegido con header X-API-Key
@@ -228,7 +228,7 @@ def estadisticas(_auth: bool = Depends(verificar_api_key)):
     """Resumen rápido de los análisis guardados."""
     from src.phishing.db import get_connection
  
-conn = get_connection()
+    conn = get_connection()
     try:
         cur = conn.cursor()
 
