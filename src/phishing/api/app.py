@@ -18,8 +18,31 @@ from src.phishing.explain import generar_explicacion, generar_resumen_corto
 from src.phishing.alertas_telegram import enviar_alerta_telegram
 from src.phishing.db import init_db, guardar_analisis, listar_ultimos
 from src.phishing.api.auth import verificar_api_key
+from src.phishing.breach_checker import check_breach
  
- 
+import time
+from collections import defaultdict
+from fastapi import Request
+
+RATE_LIMIT_MAX = 5          # consultas
+RATE_LIMIT_VENTANA = 60     # segundos
+
+_rate_limit_tracker: dict[str, list[float]] = defaultdict(list)
+
+
+def verificar_rate_limit(request: Request) -> None:
+    ip = request.client.host if request.client else "desconocido"
+    ahora = time.time()
+
+    _rate_limit_tracker[ip] = [t for t in _rate_limit_tracker[ip] if ahora - t < RATE_LIMIT_VENTANA]
+
+    if len(_rate_limit_tracker[ip]) >= RATE_LIMIT_MAX:
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail=f"Demasiadas consultas. Maximo {RATE_LIMIT_MAX} por minuto.",
+        )
+
+    _rate_limit_tracker[ip].append(ahora)
 app = FastAPI(
     title="THE TRUTH ENGINE — Anti-Phishing",
     description="Detección de phishing e ingeniería social orientada a Colombia (texto).",
@@ -29,7 +52,7 @@ app = FastAPI(
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_methods=["POST"],
+    allow_methods=["POST", "GET"],
     allow_headers=["*"],
 )
  
@@ -76,6 +99,15 @@ class AnalyzeResponse(BaseModel):
     telegram_error: Optional[str] = None
     analizado_por_llm: bool = False
     llm_categoria: Optional[str] = None
+
+class BreachCheckResponse(BaseModel):
+    encontrado: bool
+    desde_cache: bool
+    limite_agotado: bool = False
+    total_breaches: int = 0
+    riesgo: Optional[str] = None
+    breaches: Optional[List[Dict[str, Any]]] = None
+    mensaje: str
  
 # ---------------------------------------------------------------------------
 # Manejadores globales de excepciones
@@ -216,7 +248,47 @@ async def analyze(
         "analizado_por_llm": result.get("analizado_por_llm", False),
         "llm_categoria": result.get("llm_categoria"),
     }
- 
+
+@app.get("/check-breach", response_model=BreachCheckResponse)
+def check_breach_endpoint(
+    email: str,
+    request: Request,
+    _auth: bool = Depends(verificar_api_key),
+):
+    verificar_rate_limit(request)
+
+    resultado = check_breach(email)
+
+    if resultado.limite_agotado:
+        return BreachCheckResponse(
+            encontrado=False,
+            desde_cache=False,
+            limite_agotado=True,
+            mensaje="Se agoto el limite diario de consultas del servicio de brechas. Intenta de nuevo mas tarde.",
+        )
+
+    if resultado.error:
+        return BreachCheckResponse(
+            encontrado=False,
+            desde_cache=False,
+            mensaje="No se pudo completar la verificacion en este momento. Intenta de nuevo.",
+        )
+
+    if not resultado.encontrado:
+        return BreachCheckResponse(
+            encontrado=False,
+            desde_cache=resultado.desde_cache,
+            mensaje="Buenas noticias: no encontramos tu correo en ninguna filtracion conocida.",
+        )
+
+    return BreachCheckResponse(
+        encontrado=True,
+        desde_cache=resultado.desde_cache,
+        total_breaches=resultado.total_breaches,
+        riesgo=resultado.riesgo,
+        breaches=resultado.breaches,
+        mensaje=f"Tu correo aparecio en {resultado.total_breaches} filtracion(es) conocida(s).",
+    ) 
  
 @app.get("/historial")
 def historial(limit: int = 20, _auth: bool = Depends(verificar_api_key)):
