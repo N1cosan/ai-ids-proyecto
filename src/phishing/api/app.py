@@ -343,3 +343,49 @@ def estadisticas(_auth: bool = Depends(verificar_api_key)):
         }
     finally:
         conn.close()
+class IPCheckResponse(BaseModel):
+    ip: str
+    pais: Optional[str] = None
+    ciudad: Optional[str] = None
+    isp: Optional[str] = None
+    es_proxy_o_vpn: bool = False
+    es_datacenter: bool = False
+    riesgo: str = "desconocido"
+    desde_cache: bool = False
+    mensaje: str
+
+
+@app.get("/check-ip", response_model=IPCheckResponse)
+def check_ip_endpoint(
+    request: Request,
+    ip: Optional[str] = None,
+    _auth: bool = Depends(verificar_api_key),
+):
+    verificar_rate_limit(request)
+
+    ip_a_consultar = ip or obtener_ip_cliente(request)
+    resultado = check_ip(ip_a_consultar)
+
+    if resultado.error:
+        return IPCheckResponse(
+            ip=ip_a_consultar,
+            mensaje="No se pudo completar la verificacion en este momento. Intenta de nuevo.",
+        )
+
+    mensajes_riesgo = {
+        "alto": "Esta IP parece estar usando un proxy o VPN.",
+        "medio": "Esta IP pertenece a un centro de datos, no a una conexion residencial tipica.",
+        "bajo": "No se detectaron senales de riesgo en esta IP.",
+    }
+
+    return IPCheckResponse(
+        ip=resultado.ip,
+        pais=resultado.pais,
+        ciudad=resultado.ciudad,
+        isp=resultado.isp,
+        es_proxy_o_vpn=resultado.es_proxy_o_vpn,
+        es_datacenter=resultado.es_datacenter,
+        riesgo=resultado.riesgo,
+        desde_cache=resultado.desde_cache,
+        mensaje=mensajes_riesgo.get(resultado.riesgo, "Riesgo desconocido."),
+    )
