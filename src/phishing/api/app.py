@@ -24,6 +24,7 @@ from src.phishing.ip_checker import check_ip, obtener_ip_cliente
 import time
 from collections import defaultdict
 from fastapi import Request
+from src.phishing.pwned_checker import check_password
 
 RATE_LIMIT_MAX = 5          # consultas
 RATE_LIMIT_VENTANA = 60     # segundos
@@ -388,4 +389,44 @@ def check_ip_endpoint(
         riesgo=resultado.riesgo,
         desde_cache=resultado.desde_cache,
         mensaje=mensajes_riesgo.get(resultado.riesgo, "Riesgo desconocido."),
+    )
+
+class PasswordCheckRequest(BaseModel):
+    password: str = Field(..., min_length=1)
+
+class PasswordCheckResponse(BaseModel):
+    veces_filtrada: int
+    riesgo: str
+    mensaje: str
+
+
+@app.post("/check-password", response_model=PasswordCheckResponse)
+def check_password_endpoint(
+    req: PasswordCheckRequest,
+    request: Request,
+    _auth: bool = Depends(verificar_api_key),
+):
+    verificar_rate_limit(request)
+
+    resultado = check_password(req.password)
+
+    if resultado.error:
+        return PasswordCheckResponse(
+            veces_filtrada=0,
+            riesgo="desconocido",
+            mensaje="No se pudo completar la verificacion en este momento. Intenta de nuevo.",
+        )
+
+    if resultado.veces_filtrada == 0:
+        return PasswordCheckResponse(
+            veces_filtrada=0,
+            riesgo="bajo",
+            mensaje="Buenas noticias: esta contraseña no aparece en filtraciones conocidas.",
+        )
+
+    riesgo = "alto" if resultado.veces_filtrada >= 100 else "medio"
+    return PasswordCheckResponse(
+        veces_filtrada=resultado.veces_filtrada,
+        riesgo=riesgo,
+        mensaje=f"Esta contraseña ha aparecido {resultado.veces_filtrada} veces en filtraciones conocidas. Cámbiala cuanto antes, sobre todo si la usas en más de un sitio.",
     )
