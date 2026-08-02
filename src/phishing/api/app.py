@@ -25,6 +25,7 @@ import time
 from collections import defaultdict
 from fastapi import Request
 from src.phishing.pwned_checker import check_password
+from src.phishing.site_scanner import scan_site
 
 RATE_LIMIT_MAX = 5          # consultas
 RATE_LIMIT_VENTANA = 60     # segundos
@@ -429,4 +430,51 @@ def check_password_endpoint(
         veces_filtrada=resultado.veces_filtrada,
         riesgo=riesgo,
         mensaje=f"Esta contraseña ha aparecido {resultado.veces_filtrada} veces en filtraciones conocidas. Cámbiala cuanto antes, sobre todo si la usas en más de un sitio.",
+    )
+
+class ScanChecklistItem(BaseModel):
+    clave: str
+    nombre: str
+    ok: bool
+    detalle: str
+
+class ScanSiteResponse(BaseModel):
+    dominio: str
+    score: int = 0
+    riesgo: str = "desconocido"
+    checklist: List[ScanChecklistItem] = []
+    mensaje: str
+
+
+@app.get("/scan-site", response_model=ScanSiteResponse)
+def scan_site_endpoint(
+    url: str,
+    request: Request,
+    _auth: bool = Depends(verificar_api_key),
+):
+    verificar_rate_limit(request)
+
+    resultado = scan_site(url)
+
+    if resultado.error and not resultado.checklist:
+        return ScanSiteResponse(
+            dominio=resultado.dominio,
+            mensaje=f"No se pudo escanear el sitio: {resultado.error}",
+        )
+
+    mensajes_riesgo = {
+        "bajo": "Buena configuracion de seguridad basica.",
+        "medio": "Configuracion parcial: hay margen de mejora en headers de seguridad.",
+        "alto": "Configuracion debil: revisa los puntos marcados abajo.",
+    }
+
+    return ScanSiteResponse(
+        dominio=resultado.dominio,
+        score=resultado.score,
+        riesgo=resultado.riesgo,
+        checklist=[
+            ScanChecklistItem(clave=i.clave, nombre=i.nombre, ok=i.ok, detalle=i.detalle)
+            for i in resultado.checklist
+        ],
+        mensaje=mensajes_riesgo.get(resultado.riesgo, "Riesgo desconocido."),
     )
