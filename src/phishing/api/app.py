@@ -19,6 +19,7 @@ from src.phishing.alertas_telegram import enviar_alerta_telegram
 from src.phishing.db import init_db, guardar_analisis, listar_ultimos
 from src.phishing.api.auth import verificar_api_key
 from src.phishing.breach_checker import check_breach
+from src.phishing.ip_checker import check_ip, obtener_ip_cliente
  
 import time
 from collections import defaultdict
